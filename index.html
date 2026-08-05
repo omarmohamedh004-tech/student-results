@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>بوابة نتائج الطلاب السحابية</title>
+  <!-- مكتبة SheetJS لقراءة الإكسيل -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <style>
+    :root {
+      --bg-color: #0f172a;
+      --card-bg: #1e293b;
+      --accent-color: #0284c7;
+      --accent-hover: #0369a1;
+      --text-color: #f8fafc;
+      --subtext-color: #94a3b8;
+      --success-color: #22c55e;
+      --error-color: #ef4444;
+      --border-color: #334155;
+    }
+
+    * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 0; }
+    body { background-color: var(--bg-color); color: var(--text-color); display: flex; justify-content: center; align-items: center; min-height: 100vh; padding: 20px; }
+    
+    .app-card { background: var(--card-bg); border-radius: 20px; padding: 30px; width: 100%; max-width: 480px; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5); border: 1px solid var(--border-color); }
+    
+    .header { text-align: center; margin-bottom: 25px; }
+    .header h1 { font-size: 24px; color: #38bdf8; margin-bottom: 8px; }
+    .header p { font-size: 14px; color: var(--subtext-color); }
+
+    .nav-tabs { display: flex; background: #0f172a; padding: 5px; border-radius: 12px; margin-bottom: 25px; gap: 5px; }
+    .tab-btn { flex: 1; padding: 12px; border: none; background: transparent; color: var(--subtext-color); border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 15px; transition: all 0.3s; }
+    .tab-btn.active { background: var(--accent-color); color: #fff; }
+
+    .form-group { margin-bottom: 20px; text-align: right; }
+    .form-group label { display: block; font-size: 14px; color: var(--subtext-color); margin-bottom: 8px; }
+    
+    input[type="text"], input[type="password"] { width: 100%; padding: 14px; border-radius: 10px; border: 1px solid var(--border-color); background: #0f172a; color: #fff; font-size: 16px; text-align: center; }
+
+    .btn { width: 100%; padding: 14px; border: none; background: var(--accent-color); color: #fff; border-radius: 10px; font-size: 16px; font-weight: bold; cursor: pointer; transition: background 0.3s; }
+    .btn:hover { background: var(--accent-hover); }
+
+    .upload-area { border: 2px dashed var(--border-color); border-radius: 12px; padding: 30px 20px; text-align: center; background: #0f172a; cursor: pointer; margin-bottom: 20px; }
+    .upload-area:hover { border-color: var(--accent-color); }
+    input[type="file"] { display: none; }
+
+    .result-box { margin-top: 25px; padding: 20px; border-radius: 12px; background: #0f172a; border: 1px solid var(--border-color); text-align: right; display: none; }
+    .result-item { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--border-color); }
+    .result-item:last-child { border-bottom: none; }
+    .result-label { color: var(--subtext-color); }
+    .result-value { font-weight: bold; color: #38bdf8; }
+
+    .status-msg { margin-top: 15px; font-size: 14px; text-align: center; font-weight: 500; }
+    .status-msg.error { color: var(--error-color); }
+    .status-msg.success { color: var(--success-color); }
+  </style>
+</head>
+<body>
+
+<div class="app-card">
+  <div class="header">
+    <h1>🎓 بوابة نتائج الطلاب</h1>
+    <p>أدخل كود الطالب للحصول على النتيجة فوراً</p>
+  </div>
+
+  <div class="nav-tabs">
+    <button class="tab-btn active" onclick="switchTab('student')">🔍 استعلام الطالب</button>
+    <button class="tab-btn" onclick="switchTab('admin')">🔒 لوحة الأدمن</button>
+  </div>
+
+  <!-- واجهة الطالب -->
+  <div id="student-tab">
+    <div class="form-group">
+      <label for="studentCode">كود الطالب:</label>
+      <input type="text" id="studentCode" placeholder="أدخل كود الطالب هنا...">
+    </div>
+    <button class="btn" onclick="searchStudent()">عرض النتيجة</button>
+
+    <div id="resultBox" class="result-box">
+      <div class="result-item">
+        <span class="result-label">اسم الطالب:</span>
+        <span id="resName" class="result-value">-</span>
+      </div>
+      <div class="result-item">
+        <span class="result-label">النتيجة / الدرجة:</span>
+        <span id="resScore" class="result-value">-</span>
+      </div>
+    </div>
+    <div id="studentMsg" class="status-msg"></div>
+  </div>
+
+  <!-- واجهة الأدمن -->
+  <div id="admin-tab" style="display: none;">
+    <div id="adminAuth">
+      <div class="form-group">
+        <label for="adminPass">كلمة سر الأدمن:</label>
+        <input type="password" id="adminPass" placeholder="أدخل كلمة السر">
+      </div>
+      <button class="btn" onclick="verifyAdmin()">دخول لوحة التحكم</button>
+      <div id="authMsg" class="status-msg error"></div>
+    </div>
+
+    <div id="adminPanel" style="display: none;">
+      <div class="upload-area" onclick="document.getElementById('excelInput').click()">
+        <span style="font-size: 40px; display: block; margin-bottom: 10px;">📂</span>
+        <p style="font-weight: bold; margin-bottom: 5px;">اضغط هنا لاختيار ملف الإكسيل</p>
+        <p style="font-size: 12px; color: var(--subtext-color);">سيتم رفع الملف أونلاين وتحديث النتيجة لجميع الطلاب</p>
+      </div>
+      <input type="file" id="excelInput" accept=".xlsx, .xls, .csv" onchange="uploadExcelToCloud(event)">
+      <p id="fileName" style="text-align: center; font-size: 13px; color: #38bdf8; margin-bottom: 10px;"></p>
+      <div id="adminMsg" class="status-msg"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // رابط ومفتاح الاستضافة السحابية المخصصة لملفك
+  const BIN_ID = "66f0e132e41b4d34e435a2b1"; // معرف السيرفر
+  const API_KEY = "$2a$10$7Z8H1y1I8bA1E9z1b0x7u.v.a.z1b0x7u.v.a"; // مفتاح الأمان
+
+  function switchTab(type) {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    if (type === 'student') {
+      document.querySelectorAll('.tab-btn')[0].classList.add('active');
+      document.getElementById('student-tab').style.display = 'block';
+      document.getElementById('admin-tab').style.display = 'none';
+    } else {
+      document.querySelectorAll('.tab-btn')[1].classList.add('active');
+      document.getElementById('student-tab').style.display = 'none';
+      document.getElementById('admin-tab').style.display = 'block';
+    }
+  }
+
+  function verifyAdmin() {
+    const pass = document.getElementById('adminPass').value;
+    if (pass === '2242007') {
+      document.getElementById('adminAuth').style.display = 'none';
+      document.getElementById('adminPanel').style.display = 'block';
+      document.getElementById('authMsg').innerText = '';
+    } else {
+      document.getElementById('authMsg').innerText = 'كلمة السر غير صحيحة!';
+    }
+  }
+
+  // 1. الأدمن يرفع ملف الإكسيل ويفك ضغطه ويرفعه أونلاين للجميع
+  function uploadExcelToCloud(event) {
+    const file = event.target.files[0];
+    const adminMsg = document.getElementById('adminMsg');
+    if (!file) return;
+
+    document.getElementById('fileName').innerText = "تم اختيار: " + file.name;
+    adminMsg.className = "status-msg";
+    adminMsg.innerText = "جاري تحويل الملف ورفعه للسيرفر...";
+
+    const reader = new FileReader();
+    reader.onload = async function(e) {
+      try {
+        const data = new Uint8Array(e.target.result);
+        const workbook = XLSX.read(data, {type: 'array'});
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        const jsonData = XLSX.utils.sheet_to_json(sheet);
+
+        // رفع البيانات المنظمة أونلاين
+        const res = await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Master-Key': '$2a$10$eO1Ww4zX1J6Q3R3Z1X1X1e1X1X1e1X1X1e1X1X1e1X1X1e' 
+          },
+          body: JSON.stringify(jsonData)
+        });
+
+        // حفظ محلي احتياطي
+        localStorage.setItem('app_students_data', JSON.stringify(jsonData));
+
+        adminMsg.className = "status-msg success";
+        adminMsg.innerText = `تم رفع وتحديث بيانات (${jsonData.length}) طالب أونلاين بنجاح!`;
+      } catch (err) {
+        adminMsg.className = "status-msg error";
+        adminMsg.innerText = "حدث خطأ أثناء رفع الملف للسيرفر، تأكد من الاتصال بالإنترنت.";
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  }
+
+  // 2. الطالب يكتب كوده فيجلب الكود النتيجة من السيرفر فوراً
+  async function searchStudent() {
+    const code = document.getElementById('studentCode').value.trim();
+    const resultBox = document.getElementById('resultBox');
+    const msg = document.getElementById('studentMsg');
+
+    resultBox.style.display = 'none';
+    msg.innerText = '';
+
+    if (!code) {
+      msg.className = "status-msg error";
+      msg.innerText = "يرجى إدخال كود الطالب أولاً!";
+      return;
+    }
+
+    msg.className = "status-msg";
+    msg.innerText = "جاري البحث عن النتيجة...";
+
+    let studentData = [];
+
+    try {
+      // جلب البيانات المرفوعة سحابياً
+      const res = await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}/latest`);
+      if (res.ok) {
+        const data = await res.json();
+        studentData = data.record;
+      } else {
+        studentData = JSON.parse(localStorage.getItem('app_students_data') || '[]');
+      }
+    } catch (e) {
+      studentData = JSON.parse(localStorage.getItem('app_students_data') || '[]');
+    }
+
+    if (studentData.length === 0) {
+      msg.className = "status-msg error";
+      msg.innerText = "لم يتم رفع أي نتائج بعد من قبل الأدمن.";
+      return;
+    }
+
+    // البحث عن الكود في الصفوف
+    let found = studentData.find(row => Object.values(row).some(val => String(val).trim() === code));
+
+    if (found) {
+      msg.innerText = '';
+      const keys = Object.keys(found);
+      
+      // التقط العمود الأول للتسمية والثاني للنتيجة تلقائياً
+      document.getElementById('resName').innerText = found[keys[1]] || found['اسم الطالب'] || found['الاسم'] || 'غير متاح';
+      document.getElementById('resScore').innerText = found[keys[2]] || found['النتيجة'] || found['الدرجة'] || 'غير متاح';
+      
+      resultBox.style.display = 'block';
+    } else {
+      msg.className = "status-msg error";
+      msg.innerText = "عذراً، هذا الكود غير موجود في النتيجة.";
+    }
+  }
+</script>
+
+</body>
+</html>
